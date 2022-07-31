@@ -1,5 +1,6 @@
 ---
 title: "Chocolate Bar Ratings"
+subtitle: "Exploratory Data Analysis of Chocolate Ratings Data from Kaggle"
 author: "Jean Dos Santos"
 date: "13 November 2017"
 output:
@@ -12,6 +13,8 @@ output:
       collapsed: yes
       smooth_scroll: yes
 ---
+
+***
 
 # About the Data
 
@@ -29,6 +32,8 @@ Chocolates were evaluated between 2006 and 2017 on a scale of 1 to 5:
 
 The rating is a combination of both objective qualities and subjective interpretation.
 
+***
+
 # Importing Data
 
 We will use the `tidyverse` library for wrangling the data.
@@ -36,12 +41,19 @@ We will use the `tidyverse` library for wrangling the data.
 ```{r warning=FALSE, message=FALSE}
 # Original Source: http://flavorsofcacao.com/chocolate_database.html
 
-# install.packages("tidyverse")
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(tidyselect)
+library(purrr)
+library(tibble)
 
 # Read the csv file with read.csv()
 raw_data <- read.csv(file = "flavors_of_cacao.csv", encoding = "UTF-8")
 ```
+
+***
 
 # Data Cleaning and Wrangling
 
@@ -50,8 +62,6 @@ raw_data <- read.csv(file = "flavors_of_cacao.csv", encoding = "UTF-8")
 In order to make the table more readable we will change the name of some of the variables.
 
 ```{r warning=FALSE, message=FALSE}
-library(tidyverse)
-
 names(raw_data)
 
 # Change variables names
@@ -59,7 +69,6 @@ colnames(raw_data) <- c("Company", "Origin", "REF", "Review.Date", "Cocoa.Percen
 
 glimpse(raw_data)
 ```
-
 
 ## Converting factors into numeric variables
 
@@ -78,11 +87,15 @@ ratings_data$Cocoa.Percent <- as.numeric(gsub(pattern = "%", replacement = "", x
 class(ratings_data$Cocoa.Percent)
 ```
 
+***
+
 
 # Exploratory Data Analysis
 
 We will now do some exploratory data analysis of the dataset.
 
+
+***
 ## Create a Data Table
 
 We can use the package `DT` to create a data table to explore the dataset.
@@ -101,6 +114,8 @@ ratings_data %>%
 ```
 
 
+
+***
 ## Company Locations
 
 In order to have a better understanding of where the chocolates tasted were made we can create a table with a breakdown of total chocolates rated by company location.
@@ -154,6 +169,8 @@ main_locations_data %>%
 
 Most of the chocolates rated are from developed countries with most of them coming from the USA.
 
+
+***
 ## Manufacturers
 
 Similarly with the manufacturing locations we can create a breakdown of chocolates rated from each company.
@@ -207,6 +224,8 @@ main_companies_data %>%
 
 ```
 
+
+***
 ## Cocoa Content
 
 Cocoa content plays a major role in fine chocolates. A histogram can show the distribution of cocoa content in the dataset.
@@ -287,6 +306,8 @@ confint(model_cocoa.percent)
 
 The correlation between the rating and the cocoa content is -0.1648. According to the linear regression model above, each additional 1% of cocoa decreases the rating by approximately 0.012 (p-value < 0.001). 
 
+
+***
 ## Ratings
 
 ### Distribution of Ratings
@@ -296,8 +317,6 @@ The correlation between the rating and the cocoa content is -0.1648. According t
 summary(ratings_data$Rating)
 
 # Histogram of Chocolate Ratings
-library(ggplot2)
-
 ggplot(data = ratings_data, aes(x = Rating)) +
   geom_histogram(bins = 15, alpha = 0.8) +
   theme_light() +
@@ -473,6 +492,8 @@ ggplot(data = ratings_data) +
 ```
 
 
+
+***
 ## Bean Origin
 
 Most chocolates in this dataset have their origin disclosed, this is useful to understand if some origins have higher ratings than others.
@@ -517,6 +538,8 @@ ratings_data[(ratings_data$Bean.Origin %in% main_bean_origins), ] %>%
 
 ```
 
+
+***
 ## Bean Type
 
 There are four main varieties of cocoa (Theobroma cacao): 
@@ -577,6 +600,8 @@ ratings_data[(ratings_data$Bean.Type %in% main_Bean.Type), ] %>%
     ggtitle(label = "Distribution of Chocolate Ratings by Bean Type")
 
 ```
+
+***
 
 
 # Conclusion
