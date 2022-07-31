@@ -1,0 +1,610 @@
+---
+title: "Chocolate Bar Ratings"
+subtitle: "Exploratory Data Analysis of Chocolate Ratings Data from Kaggle"
+author: "Jean Dos Santos"
+date: "13 November 2017"
+output:
+  html_document:
+    highlight: tango
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+***
+
+# About the Data
+
+The dataset from which the analysis below was done was obtained from the [Flavors of Cacao](http://flavorsofcacao.com/index.html) site and is also available on [Kaggle](https://www.kaggle.com/rtatman/chocolate-bar-ratings).
+
+The dataset contains almost 1800 expert ratings of various chocolate bars from different types of cocoa beans, origins, companies and manufacturing countries. Each rating also contains additional information about the specific bean origin (if known) and information about the percentage of cocoa.
+
+Chocolates were evaluated between 2006 and 2017 on a scale of 1 to 5:
+
+1. Unpleasant
+2. Disappointing 
+3. Satisfactory (3.0) to praiseworthy (3.75)
+4. Premium 
+5. Elite 
+
+The rating is a combination of both objective qualities and subjective interpretation.
+
+***
+
+# Importing Data
+
+We will use the `tidyverse` library for wrangling the data.
+
+```{r warning=FALSE, message=FALSE}
+# Original Source: http://flavorsofcacao.com/chocolate_database.html
+
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(tidyselect)
+library(purrr)
+library(tibble)
+
+# Read the csv file with read.csv()
+raw_data <- read.csv(file = "flavors_of_cacao.csv", encoding = "UTF-8")
+```
+
+***
+
+# Data Cleaning and Wrangling
+
+## Changing Names of Variables
+
+In order to make the table more readable we will change the name of some of the variables.
+
+```{r warning=FALSE, message=FALSE}
+names(raw_data)
+
+# Change variables names
+colnames(raw_data) <- c("Company", "Origin", "REF", "Review.Date", "Cocoa.Percent", "Company.Location", "Rating", "Bean.Type", "Bean.Origin")
+
+glimpse(raw_data)
+```
+
+## Converting factors into numeric variables
+
+The percentage of cocoa seems to have been saved as a factor instead of a numeric variable. We will convert it to numeric by removing "%" and using the `as.numeric` function.
+
+
+```{r warning=FALSE, message=FALSE}
+library(stringr)
+
+# Create a new object for the data
+ratings_data <- raw_data
+
+# Remove "%" sign from cocoa content and convert it to a numeric variable
+ratings_data$Cocoa.Percent <- as.numeric(gsub(pattern = "%", replacement = "", x = ratings_data$Cocoa.Percent))
+
+class(ratings_data$Cocoa.Percent)
+```
+
+***
+
+
+# Exploratory Data Analysis
+
+We will now do some exploratory data analysis of the dataset.
+
+
+***
+## Create a Data Table
+
+We can use the package `DT` to create a data table to explore the dataset.
+
+```{r warning=FALSE, message=FALSE}
+# install.packages("DT")
+library(DT)
+
+# Create table
+ratings_data %>% 
+  select(-REF) %>% # Remove reference number from table
+  datatable(rownames = FALSE, 
+          filter = 'top', 
+          options = list(autoWidth = TRUE),
+          colnames = c("Company", "Origin", "Review Year", "Cocoa Content (%)", "Company Location", "Rating", "Bean Type", "Bean Origin"))
+```
+
+
+
+***
+## Company Locations
+
+In order to have a better understanding of where the chocolates tasted were made we can create a table with a breakdown of total chocolates rated by company location.
+
+```{r warning=FALSE, message=FALSE}
+# Create an object with total number of chocolate counts per company location
+Country_Counts <- ratings_data %>% 
+  select(Company, Company.Location) %>% 
+  group_by(Company.Location) %>% 
+  summarise(Count = n()) %>% # Summarize number of chocolates rated per location
+  arrange(desc(Count)) # Arranges total counts from highest to lowest
+
+# Create table
+datatable(Country_Counts, colnames = c("Company Location", "Count"))
+```
+
+
+
+Most of the chocolats were made in the USA followed by France, Canada, the UK and Italy.
+
+The values from the table above can be summarized using a bar chart.
+
+```{r fig.asp=1.4}
+# Create a barplot of count of chocolates for each company location
+
+# install.packages("RColorBrewer")
+library(RColorBrewer)
+# install.packages("colorRamps")
+library(colorRamps)
+
+# Create data set with the data of main locations
+main_locations_data <- ratings_data
+
+# Order data set from companies that have the most to least chocolate ratings
+main_locations_data$Company.Location <- factor(x = main_locations_data$Company.Location, levels = names(sort(table(main_locations_data$Company.Location), decreasing = TRUE, na.last = TRUE)))
+
+# Use ggplot2 to create a bar chart of Company Locations and the total number of chocolates rated
+main_locations_data %>% 
+  ggplot(aes(x = Company.Location, fill = Company.Location)) +
+    geom_bar(show.legend = FALSE) +
+    coord_flip(expand = FALSE) + 
+    scale_color_gradient() +
+    scale_x_discrete(name = "Location") +
+    scale_y_continuous(name = "Count", limits = c(0,800)) +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+    labs(x = "Company Location", y = "Count") +
+    ggtitle(label = "Number of Chocolates Rated by Location")
+
+```
+
+Most of the chocolates rated are from developed countries with most of them coming from the USA.
+
+
+***
+## Manufacturers
+
+Similarly with the manufacturing locations we can create a breakdown of chocolates rated from each company.
+
+```{r warning=FALSE, message=FALSE}
+# Create an object with total number of chocolate counts per company 
+Company_Counts <- ratings_data %>% 
+  select(Company, Company.Location) %>%
+  group_by(Company, Company.Location) %>% 
+  summarise(Count = n()) %>% 
+  arrange(desc(Count))
+
+# Create table
+datatable(Company_Counts,
+          filter = 'top', 
+          options = list(autoWidth = TRUE),
+          colnames = c("Company", "Company Location", "Chocolates Rated"))
+```
+
+
+Soma from Canada has the most chocolates rated followed by Bonnat (France), Fresco (USA) and Pralus (France). A total of 418 different companies had at least one of their chocolates rated.
+
+```{r fig.asp=1.3}
+# Create vector of companies that have at least 10 chocolates rated
+main_companies <- Company_Counts %>% 
+  filter(Count >= 10) %>% 
+  select(Company, Company.Location) %>%
+    select(Company) %>% 
+  as_vector()
+
+# Use the vector main_companies to create a data set of companies that have at least 10 chocolates rated
+main_companies_data <- ratings_data[(ratings_data$Company %in% main_companies), ]
+
+# Order data set from companies that have the most to least chocolate ratings
+main_companies_data$Company <- factor(x = main_companies_data$Company, levels = names(sort(table(main_companies_data$Company), decreasing = TRUE, na.last = TRUE)))
+
+# Use ggplot2 to create a bar chart of Companies and the total number of chocolates rated
+main_companies_data %>% 
+  ggplot(aes(x = Company, fill = Company.Location)) +
+    geom_bar() +
+    coord_flip(expand = FALSE) + 
+    scale_fill_manual(values = c("#882E72", "#B178A6", "#D6C1DE", "#1965B0", "#5289C7", "#7BAFDE", "#4EB265", "#90C987", "#CAE0AB", "#F7EE55", "#F6C141", "#F1932D", "#E8601C", "#DC050C")) + # Paul Tol color pallete https://www.r-bloggers.com/the-paul-tol-21-color-salute/
+    scale_x_discrete(name = "Company") +
+    scale_y_continuous(name = "Number of Chocolates Rated", limits = c(0,50)) +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+    labs(fill = "Country") +
+    ggtitle(label = "Number of Chocolates Rated by Company", subtitle = "Subset of companies with at least 10 chocolates rated.")
+  
+
+
+```
+
+
+***
+## Cocoa Content
+
+Cocoa content plays a major role in fine chocolates. A histogram can show the distribution of cocoa content in the dataset.
+
+```{r warning=FALSE, message=FALSE}
+# Obtain summary statistics about cocoa content
+summary(ratings_data$Cocoa.Percent)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(ggplot2)
+
+# Histogram of Cocoa Content
+ggplot(data = ratings_data, aes(x = Cocoa.Percent)) +
+  geom_histogram(bins = 20, alpha = 0.80) + # set number of bins to 20
+  theme_light() + # Use a custome theme
+  coord_cartesian(expand = FALSE, ylim = c(0, 750)) +
+  labs(x = "Cocoa Content (%)", 
+       y = "Count",
+       title = "Distribution of Cocoa Content in Chocolates")
+```
+
+Most chocolates seem to have a cocoa content ranging between 70% and 80%. The average cocoa content is 71.7% and the values range from 42% to 100% cocoa content.
+
+The distribution of cocoa content over the years can be visualized through a scatter plot or boxplot for example.
+
+```{r warning=FALSE, message=FALSE}
+# Scatter plot of Cocoa Content by Year
+ggplot(data = ratings_data, aes(x = Review.Date, y = Cocoa.Percent)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.2, na.rm = TRUE) +
+  scale_x_continuous(name = "Year", limits = range(ratings_data$Review.Date), breaks = seq(2006, 2017, 1), minor_breaks = NULL) +
+  scale_y_continuous(name = "Cocoa Content (%)", breaks = seq(40, 100, 10), minor_breaks = NULL) +
+  theme_minimal() +
+  ggtitle(label = "Cocoa Content of Chocolates by Year")
+
+```
+
+```{r warning=FALSE, message=FALSE}
+# Boxplot of Cocoa Content by Year
+ggplot(data = ratings_data, aes(factor(Review.Date), Cocoa.Percent)) +
+  geom_boxplot(outlier.alpha = 0.2) + 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), width = .75, linetype = "dashed") + # Adds dash line for sample mean
+  scale_y_continuous(name = "Cocoa Content (%)", breaks = seq(40, 100, 10), minor_breaks = NULL) +
+  theme_minimal() +
+  labs(x = "Review Year") +
+  ggtitle(label = "Cocoa Content of Chocolates by Year")
+
+```
+
+By plotting the ratings against the cocoa content we can see if there is a correlation between cocoa content and rating.
+
+```{r fig.asp=1}
+# Scatter Plot of Rating and Cocoa Content
+
+ggplot(data = ratings_data, aes(x = Cocoa.Percent, y = Rating)) +
+  geom_point(alpha = 0.1, position = position_jitter(width = 0.2, height = 0.05)) +
+  geom_smooth(method = "lm", col = "black") +
+  scale_x_continuous(name = "Cocoa Content (%)", breaks = seq(40, 100, 10), minor_breaks = NULL) +
+  scale_y_continuous(name = "Rating") +
+  theme_minimal() +
+  labs(x = "Review Year") +
+  ggtitle(label = "Cocoa Content and Chocolate Ratings", subtitle = "Chocolates reviewed between 2006 and 2017")
+
+```
+
+```{r}
+# Determine the correlation between cocoa content and chocolate rating
+cor(x = ratings_data$Cocoa.Percent, y = ratings_data$Rating, method = "pearson")
+
+# Fit a linear model to predict rating based on Cocoa Content
+model_cocoa.percent <- lm(Rating ~ Cocoa.Percent, data = ratings_data)
+summary(model_cocoa.percent)
+
+# Obtain 95% confidence interval for model parameters
+confint(model_cocoa.percent)
+
+```
+
+The correlation between the rating and the cocoa content is -0.1648. According to the linear regression model above, each additional 1% of cocoa decreases the rating by approximately 0.012 (p-value < 0.001). 
+
+
+***
+## Ratings
+
+### Distribution of Ratings
+
+```{r warning=FALSE, message=FALSE}
+# Summary statistics of chocolate ratings
+summary(ratings_data$Rating)
+
+# Histogram of Chocolate Ratings
+ggplot(data = ratings_data, aes(x = Rating)) +
+  geom_histogram(bins = 15, alpha = 0.8) +
+  theme_light() +
+  coord_cartesian(expand = FALSE, ylim = c(0, 700)) +
+  labs(x = "Rating", 
+       y = "Count",
+       title = "Distribution of Chocolate Ratings")
+```
+
+The average rating is 3.186 and the median is 3.25. From the histogram above we can see that most ratings range between 2.5 and 4.
+
+We can create a histogram with more detail such as the distribution of score with a different colour for each range of cocoa content.
+
+```{r warning=FALSE, message=FALSE}
+# Histogram of Chocolate Ratings by Cocoa Content
+
+# Create bins of various ranges of cocoa content
+ratings_data$Cocoa.Percent_bin <- cut(ratings_data$Cocoa.Percent, 
+                                      breaks = c(40, 50, 60, 70, 80, 90, 100))
+
+ggplot(data = ratings_data, aes(x = Rating, fill = Cocoa.Percent_bin)) +
+  geom_histogram(bins = 15) +
+  theme_light() +
+  coord_cartesian(expand = FALSE, ylim = c(0, 700)) +
+  scale_fill_brewer(type = "seq", 
+                    palette = "YlOrBr", 
+                    labels = c("40-50", "50-60", "60-70", "70-80", "80-90", "90-100"), 
+                    name = "Cocoa Content (%)") +
+  labs(x = "Rating", 
+       y = "Count",
+       title = "Distribution of Chocolate Ratings")
+```
+
+We can see that the ratings are fairly distributed for each range of cocoa content with the exception of the highest range (90-100%) where the rating are below average.
+
+### Ratings by Year
+
+```{r warning=FALSE, message=FALSE}
+# Boxplot of Chocolate Ratings by Year
+ggplot(data = ratings_data, aes(x = factor(Review.Date), y = Rating)) +
+  geom_boxplot(outlier.alpha = 0.2) + 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), width = .75, linetype = "dashed") + # Adds dash line for sample mean
+  scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+  theme_minimal() +
+  labs(x = "Review Year") +
+  ggtitle(label = "Distribution of Chocolate Ratings by Year", subtitle = "2006-2017")
+
+```
+
+From the chart above we can see that the distribution of ratings is fairly similar over the years.
+
+```{r warning=FALSE, message=FALSE}
+# Trendline of Average Rating
+ratings_data %>% 
+  select(Review.Date, Cocoa.Percent, Company.Location, Rating) %>% 
+  group_by(Review.Date) %>% 
+  summarise(Avg_Rating = mean(Rating)) %>% 
+  ggplot(aes(x = Review.Date, y = Avg_Rating)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE, color = "grey20") +
+  scale_y_continuous(name = "Rating", minor_breaks = NULL) +
+  scale_x_continuous(name = "Year", limits = range(ratings_data$Review.Date), breaks = seq(2006, 2017, 1), minor_breaks = NULL) +
+  theme_minimal() +
+  labs(x = "Review Year") +
+  ggtitle(label = "Average Chocolate Rating by Year", subtitle = "From 2006 to 2017")
+```
+
+ From 2006 until 2017 the average chocolate rating increased although not by much.
+
+### Ratings by Company
+
+```{r fig.asp=1, message=FALSE, warning=FALSE}
+
+# Create vector with the 50 Companies that have the most ratings
+main_company <- names(sort(table(ratings_data$Company), decreasing = TRUE, na.last = TRUE)[1:50])
+
+# Create Summary Table of Ratings by Company
+
+# install.packages("DT")
+library(DT)
+ratings_data[(ratings_data$Company %in% main_company), ] %>% 
+  group_by(Company) %>% 
+  summarise(Average = round(mean(Rating),2),
+            Median = median(Rating),
+            Minimum = min(Rating),
+            Maximum = max(Rating),
+            Count = n()) %>% 
+  datatable(rownames = FALSE, 
+            filter = "top", 
+            colnames = c("Company", "Average Rating", "Median Rating", "Lowest Rating", "Highest Rating", "Chocolates Rated"))
+
+# Create Boxplot of Chocolate Ratings by Company
+Boxplot_Rating_Company <- ratings_data[(ratings_data$Company %in% main_company), ] %>% 
+  ggplot(aes(x = Company, y = Rating, fill = Company.Location)) +
+    geom_boxplot(alpha = 0.6) + 
+    stat_summary(fun.y = mean, geom = "point", pch = 1) + # Add average rating to the boxplot
+    scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+    scale_fill_manual(name = "Country", values = c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")) + # Paul Tol color pallete https://www.r-bloggers.com/the-paul-tol-21-color-salute/
+    coord_flip() + 
+    theme_minimal() +
+    labs(x = "Company") +
+    ggtitle(label = "Distribution of Chocolate Ratings by Company")
+
+# Load plotly package
+# install.packages("plotly")
+library(plotly)
+
+# Create Interactive Boxplot with plotly
+ggplotly(Boxplot_Rating_Company)
+```
+
+
+Of the 50 companies with most chocolates rated [Amedei](http://www.amedei.it/en/) is the company with the highest average rating (3.85). Amedei also has the highest rated chocolate of this subset with a rating of 5.
+
+![](http://aziende.freecomm.it/390798/prodotti/S_QPALVXTM.jpg)
+
+### Ratings by Location
+
+```{r warning=FALSE, message=FALSE}
+# Create vector with the 30 main company locations
+main_company.location <- names(sort(table(ratings_data$Company.Location), decreasing = TRUE, na.last = TRUE)[1:30])
+
+# Create Summary Table of Ratings by Location
+
+# install.packages("DT")
+library(DT)
+ratings_data[(ratings_data$Company.Location %in% main_company.location), ] %>% 
+  group_by(Company.Location) %>% 
+  summarise(Average = round(mean(Rating),2),
+            Median = median(Rating),
+            Minimum = min(Rating),
+            Maximum = max(Rating),
+            Count = n()) %>% 
+  datatable(rownames = FALSE, 
+            filter = "top", 
+            options = list(autoWidth = TRUE),
+            colnames = c("Location", "Average Rating", "Median Rating", "Lowest Rating", "Highest Rating", "Chocolates Rated"))
+
+# Boxplot of Chocolate Ratings by Location
+Boxplot_Rating_Locations <- ratings_data[(ratings_data$Company.Location %in% main_company.location), ] %>% 
+  ggplot(aes(x = Company.Location, y = Rating)) +
+    geom_boxplot(alpha = 0.2) + 
+    stat_summary(fun.y = mean, geom = "point", pch = 19) +
+    scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+    coord_flip() + 
+    theme_minimal() +
+    labs(x = "Location") +
+    ggtitle(label = "Distribution of Chocolate Ratings by Company Location")
+
+library(plotly)
+ggplotly(Boxplot_Rating_Locations)
+
+```
+
+From the subset of the 30 main company locations there is a wide range of number of chocolates rated. Chocolates from Vietnam have the highest average and median rating. This is due to the manufacturer of fine chocolates [Marou](http://marouchocolate.com/)
+
+![](https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/94e5017165407.562a86eca11de.jpg)
+
+### Cocoa Content and Rating
+
+As we saw above, there seems to be a negative correlation between cocoa content and rating. The highest rated chocolates seem to have a cocoa content between 60 and 80% cocoa.
+
+```{r warning=FALSE, message=FALSE}
+# Boxplot of Cocoa Content and Rating
+ggplot(data = ratings_data) +
+  geom_boxplot(alpha = 0.8, aes(x = Cocoa.Percent_bin, y = Rating)) +
+  scale_x_discrete(name = "Cocoa Content (%)", labels = c("40-50", "50-60", "60-70", "70-80", "80-90", "90-100")) +
+  scale_y_continuous(name = "Rating") +
+  theme_minimal() +
+  labs(x = "Review Year") +
+  ggtitle(label = "Cocoa Content and Chocolate Ratings", 
+          subtitle = "Chocolates reviewed between 2006 and 2017")
+```
+
+
+
+***
+## Bean Origin
+
+Most chocolates in this dataset have their origin disclosed, this is useful to understand if some origins have higher ratings than others.
+
+```{r warning=FALSE, message=FALSE}
+# Create  summary table of ratings by bean origin
+
+# install.packages("DT")
+library(DT)
+ratings_data %>% 
+  group_by(Bean.Origin) %>% 
+  summarise(Average = round(mean(Rating),2),
+            Median = median(Rating),
+            Minimum = min(Rating),
+            Maximum = max(Rating),
+            Count = n()) %>% 
+  datatable(rownames = FALSE, filter = 'top', 
+            options = list(autoWidth = TRUE),
+            colnames = c("Origin", "Average Rating", "Median Rating", "Lowest Rating", "Highest Rating", "Chocolates Rated"))
+```
+
+From the table above we can see that Honduras, Congo, Vietnam, Guatemala and Papua New Guinea are the origins with more than 10 chocolates rated that have the highest average rating.
+
+```{r}
+# Create vector with the 20 main cocoa origins
+main_bean_origins <- names(sort(table(x = ratings_data$Bean.Origin), decreasing = TRUE, na.last = TRUE)[1:20])
+
+main_bean_origins[6] <- "Unknown"
+
+ratings_data$Bean.Origin <- factor(x = ratings_data$Bean.Origin, levels = rev(levels(ratings_data$Bean.Origin))) # Reverse order of factors to allow boxplot to be in alphabetical order
+
+# Boxplot of Chocolate Ratings by Bean Origin
+ratings_data[(ratings_data$Bean.Origin %in% main_bean_origins), ] %>% 
+  ggplot(aes(x = Bean.Origin, y = Rating)) +
+    geom_boxplot(alpha = 0.2) + 
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), width = .75, linetype = "dashed") + # add average rating to boxplot as a dashed bar
+    scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+    coord_flip() + 
+    theme_minimal() +
+    labs(x = "Bean Origin") +
+    ggtitle(label = "Distribution of Chocolate Ratings by Bean Origin", subtitle = "Subset of the 20 main origins")
+
+```
+
+
+***
+## Bean Type
+
+There are four main varieties of cocoa (Theobroma cacao): 
+* Forastero
+* Criollo 
+* Trinitario
+* Nacional
+
+![Three varieties of cocoa: Criollo, Trinitario and Forastero (source: Cacao Fino de Aroma)](http://www.cacaofinodearoma.com/wp-content/uploads/2016/09/img-cfda-tipos-de-cacao.png)
+
+Forastero is originally from the Amazonas region but is mostly grown in West Africa. Forastero varieties form most of what is called "bulk" cocoa. Criollo is a fine cacao that is rarely grown because of its susceptibility to diseases and low yields. It is however a high quality cocoa bean as it is less bitter and more aromatic than bulk cocoa. Trinitario is a hybrid of Forastero and Criollo and is a cocoa of high quality. Nacional is a rare variety typically grown in Ecuador and is a fine cocoa.
+
+```{r warning=FALSE, message=FALSE}
+# Create  summary table of ratings by bean origin
+
+# install.packages("DT")
+library(DT)
+ratings_data %>% 
+  group_by(Bean.Type) %>% 
+  summarise(Average = round(mean(Rating),2),
+            Median = median(Rating),
+            Minimum = min(Rating),
+            Maximum = max(Rating),
+            Count = n()) %>% 
+  datatable(rownames = FALSE, filter = 'top', 
+            options = list(autoWidth = TRUE),
+            colnames = c("Bean Type", "Average Rating", "Median Rating", "Lowest Rating", "Highest Rating", "Chocolates Rated"))
+```
+
+We can plot the type of bean against rating to determine if bean variety affects overall chocolate rating. 
+
+```{r fig.asp=1.1, warning=FALSE, message=FALSE}
+# Create vector with the main cocoa types
+main_Bean.Type <- names(sort(table(x = ratings_data$Bean.Type), decreasing = TRUE, na.last = TRUE))[1:10]
+main_Bean.Type[1] <- "Unknown"
+ratings_data$Bean.Type <- factor(x = ratings_data$Bean.Type, levels = rev(levels(ratings_data$Bean.Type))) # Reverse order of factors to allow boxplot to be in alphabetical order
+
+# Boxplot of Chocolate Ratings by Bean Origin
+ratings_data[(ratings_data$Bean.Type %in% main_Bean.Type), ] %>% 
+  ggplot(aes(x = Bean.Type, y = Rating)) +
+    geom_boxplot(alpha = 0.2) + 
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), width = .75, linetype = "dashed") +
+    scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+    coord_flip() + 
+    theme_minimal() +
+    labs(x = "Bean Origin") +
+    ggtitle(label = "Distribution of Chocolate Ratings by Bean Type")
+
+# Scatter Plot of Chocolate Ratings by Bean Origin
+ratings_data[(ratings_data$Bean.Type %in% main_Bean.Type), ] %>% 
+  ggplot(aes(x = Bean.Type, y = Rating, col = Cocoa.Percent_bin)) +
+    geom_point(alpha = 0.5, position = position_jitter(height = 0)) + 
+    scale_color_brewer(type = "seq", palette = "YlOrBr", name = "Cocoa Content (%)", labels = c("50-60", "60-70", "70-80", "80-90", "90-100")) +
+    scale_y_continuous(name = "Rating", breaks = seq(1, 5, 1), minor_breaks = NULL) +
+    coord_flip() + 
+    theme_minimal() +
+    labs(x = "Bean Origin") +
+    ggtitle(label = "Distribution of Chocolate Ratings by Bean Type")
+
+```
+
+***
+
+
+# Conclusion
+
+There seem to be several factors that affect the rating of a chocolate as we saw that there is a small negative correlation between cocoa content and rating. The manufacturer and the origin of the cocoa also plays a role on the quality of the chocolate.
+
